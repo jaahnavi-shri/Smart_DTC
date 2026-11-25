@@ -1,0 +1,1246 @@
+{#-
+  Smart DTC - index.html
+  ONE Jinja2 template for EVERY page of the website, plus its JavaScript.
+  app.py sends a variable called `page` ("home", "track", "buses", ...),
+  and the if / elif chain inside <main> shows only that page.
+  One special page, "track_live", is only the moving part of the Live
+  Tracking page: the JavaScript asks for it every few seconds.
+
+  Jinja2 in 3 lines:
+    {{ value }}           prints a value sent by app.py
+    {% if %} {% for %}    logic, closed by {% endif %} and {% endfor %}
+    {% macro %}           a reusable piece of HTML, like a Python function
+  This comment block itself never reaches the browser.
+-#}
+
+{#- ======================= REUSABLE PIECES (macros) ======================= -#}
+
+{#- Line icons drawn with SVG. icon('bus') prints the bus icon. -#}
+{%- set ICONS = {
+  'home': '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',
+  'map': '<path d="M12 21s-7-6.1-7-11.5a7 7 0 0 1 14 0C19 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
+  'bus': '<rect x="4" y="3" width="16" height="14" rx="3"/><path d="M4 10h16"/><path d="M7 21v-4M17 21v-4"/><circle cx="8" cy="13.5" r="1"/><circle cx="16" cy="13.5" r="1"/>',
+  'bulb': '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  'info': '<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5h.01"/>',
+  'chart': '<path d="M3 21h18"/><rect x="5" y="12" width="3" height="9" rx="1"/><rect x="10.5" y="6" width="3" height="15" rx="1"/><rect x="16" y="9" width="3" height="12" rx="1"/>',
+  'grid': '<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>',
+  'code': '<path d="m8 7-5 5 5 5M16 7l5 5-5 5M13.5 4l-3 16"/>',
+  'shield': '<path d="M12 3l8 3v5.5c0 4.6-3.3 8.4-8 9.5-4.7-1.1-8-4.9-8-9.5V6z"/><path d="m9 12 2 2 4-4"/>',
+  'ticket': '<path d="M3 7.5V5h18v2.5a2.5 2.5 0 0 0 0 5V19H3v-6.5a2.5 2.5 0 0 0 0-5z"/><path d="M14 5v2M14 11v2M14 17v2"/>',
+  'moon': '<path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/>',
+  'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  'users': '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14a6 6 0 0 1 3.5 6"/>',
+  'alert': '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>',
+  'check': '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  'arrow': '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  'search': '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/>',
+  'route': '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16"/>',
+  'login': '<path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9"/>',
+  'logout': '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+  'seat': '<path d="M7 4v9a2 2 0 0 0 2 2h7"/><path d="M7 15l-1 5M16 15l1 5M9 11h8v4"/>',
+  'leaf': '<path d="M5 19c0-9 6-14 15-15 0 9-5 15-14 15z"/><path d="M5 19 13 11"/>',
+  'scale': '<path d="M12 3v18M7 21h10M5 7h14"/><path d="M5 7l-3 6a3 3 0 0 0 6 0zM19 7l-3 6a3 3 0 0 0 6 0z"/>',
+  'city': '<path d="M3 21h18M5 21V8l5-3v16M10 21V10h9v11"/><path d="M13 13h3M13 16h3M7 11h1M7 14h1M7 17h1"/>',
+  'zap': '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  'heart': '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
+  'plus': '<path d="M12 5v14M5 12h14"/>',
+  'clock': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
+} -%}
+
+{%- macro icon(name) -%}
+<svg class="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">{{ ICONS[name] | safe }}</svg>
+{%- endmacro -%}
+
+{#- On time, late, or not running: the coloured label next to every bus -#}
+{%- macro late_badge(bus) -%}
+{%- if not bus.in_service -%}
+<span class="late-badge is-off js-late">Not running</span>
+{%- elif not bus.running -%}
+<span class="late-badge is-off js-late">Not started</span>
+{%- elif bus.live.late > 0 -%}
+<span class="late-badge is-late js-late">Late {{ bus.live.late }} min</span>
+{%- else -%}
+<span class="late-badge is-on-time js-late">On time</span>
+{%- endif -%}
+{%- endmacro -%}
+
+{#- One bus in the small "Live buses" window on the Home page -#}
+{%- macro bus_row(bus) -%}
+<li class="bus-row" data-bus-id="{{ bus.id }}">
+  <span class="bus-badge">{{ icon('bus') }}</span>
+  <div class="bus-row-main">
+    <p class="bus-row-top"><strong>{{ bus.number }}</strong><span>{{ bus.route_label }}</span></p>
+    <p class="bus-row-next">Next: <strong class="js-next">{{ bus.live.next_stop }}</strong> {{ late_badge(bus) }}</p>
+  </div>
+  <span class="eta-pill js-eta" data-eta="{{ bus.live.eta_seconds }}">{{ bus.live.eta_text }}</span>
+  <p class="bus-row-seats"><strong class="js-seats">{{ plural(bus.available, 'seat') }} free</strong><span class="crowd crowd-{{ bus.crowd_class }} js-crowd">{{ bus.crowd }}</span></p>
+  <div class="bus-row-actions">
+    {% if bus.available > 0 %}
+    <a class="btn btn-primary btn-sm" href="{{ url_for('book', bus_id=bus.id) }}">Book</a>
+    {% else %}
+    <a class="btn btn-muted btn-sm" href="{{ url_for('book', bus_id=bus.id) }}">Bus Full</a>
+    {% endif %}
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('track', bus_id=bus.id) }}" title="Live tracking for {{ bus.number }}">{{ icon('map') }}<span class="sr-only">Track</span></a>
+  </div>
+</li>
+{%- endmacro -%}
+
+{#- One bus card on the Buses page -#}
+{%- macro bus_card(bus) -%}
+<article class="bus-card" data-bus-id="{{ bus.id }}">
+  <header class="bus-head">
+    <span class="bus-badge">{{ icon('bus') }}</span>
+    <div class="bus-title">
+      <h4>{{ bus.number }}</h4>
+      <p>{{ bus.route_label }}</p>
+    </div>
+    <div class="ring ring-{{ bus.crowd_class }}" style="--p: {{ bus.percent }}" title="{{ bus.percent }}% of seats taken">
+      <span class="js-percent">{{ bus.percent }}%</span>
+    </div>
+  </header>
+  {% if bus.in_service %}
+  <div class="next-box">
+    <div class="next-text">
+      <span class="label">Next stop</span>
+      <strong class="js-next">{{ bus.live.next_stop }}</strong>
+    </div>
+    <span class="eta-pill js-eta" data-eta="{{ bus.live.eta_seconds }}">{{ bus.live.eta_text }}</span>
+  </div>
+  <div class="then-box">
+    <span class="label">After that</span>
+    {#- upcoming[0] is the next stop shown above, so start from [1] (slicing) -#}
+    <ol class="then-list js-then">
+      {% for stop in bus.live.upcoming[1:4] %}
+      <li><span>{{ stop.name }}</span><em>in {{ (stop.seconds + 59) // 60 }} min</em></li>
+      {% else %}
+      <li class="then-end">Last stop of this trip, then it turns back</li>
+      {% endfor %}
+    </ol>
+  </div>
+  <p class="bus-status">{{ late_badge(bus) }}<span class="js-status">{{ bus.live.status_text }}</span></p>
+  {% else %}
+  <div class="next-box off-box">{{ icon('clock') }}<span>Not running: its timetable is switched off.</span></div>
+  {% endif %}
+  <p class="bus-seats"><strong class="js-seats">{{ plural(bus.available, 'seat') }} free</strong> · <span class="crowd crowd-{{ bus.crowd_class }} js-crowd">{{ bus.crowd }}</span></p>
+  <div class="card-actions">
+    {% if not bus.in_service %}
+    <span class="btn btn-muted btn-sm">Not running</span>
+    {% elif bus.available > 0 %}
+    <a class="btn btn-primary btn-sm" href="{{ url_for('book', bus_id=bus.id) }}">{{ icon('ticket') }} Book seat</a>
+    {% else %}
+    <a class="btn btn-muted btn-sm" href="{{ url_for('book', bus_id=bus.id) }}">Bus Full</a>
+    {% endif %}
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('track', bus_id=bus.id) }}">{{ icon('map') }} Track</a>
+  </div>
+</article>
+{%- endmacro -%}
+
+{#- A simple bar chart made from bar_rows() in app.py (About > Impact) -#}
+{%- macro bar_chart(rows) -%}
+  <ul class="bars">
+    {% for row in rows %}
+    <li>
+      <span class="bar-name">{{ row.name }}</span>
+      <span class="bar-track"><span class="bar-fill" style="width: {{ row.width }}%"></span></span>
+      <span class="bar-count">{{ row.count }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if rows | sum(attribute='count') == 0 %}
+  <p class="muted empty-chart">No bookings yet. Book a ticket and this chart fills in.</p>
+  {% endif %}
+{%- endmacro -%}
+
+{#- The moving part of Live Tracking: the list of buses and the chosen bus
+    stop by stop. The JavaScript asks app.py for it again every 5 seconds
+    (/track/1?part=live) and swaps it in, so it stays live. -#}
+{%- macro tracker_live(bus, buses, changes) -%}
+<aside class="trk-list" aria-label="Choose a bus">
+  <p class="label">Buses running</p>
+  {% for one in buses %}
+  <a class="trk-item {{ 'is-active' if bus and one.id == bus.id else '' }}" href="{{ url_for('track', bus_id=one.id) }}">
+    <span class="trk-item-top"><strong>{{ one.number }}</strong>{{ late_badge(one) }}</span>
+    <span class="trk-item-route">{{ one.route_label }}</span>
+    <span class="trk-item-next">Next: {{ one.live.next_stop }} · <b data-eta="{{ one.live.eta_seconds }}">{{ one.live.eta_text }}</b></span>
+  </a>
+  {% else %}
+  <p class="muted small">No buses are running right now.</p>
+  {% endfor %}
+</aside>
+
+<section class="trk-main">
+  {% if bus is none %}
+  <div class="panel empty-state">
+    {{ icon('clock') }}
+    <h3>No buses are running right now</h3>
+    <p class="muted">A depot admin can switch on a bus's timetable on the Manage routes page.</p>
+  </div>
+  {% elif not bus.in_service %}
+  <div class="panel empty-state">
+    {{ icon('clock') }}
+    <h3>{{ bus.number }} is not running</h3>
+    <p class="muted">Its timetable is switched off, so it stays at {{ bus.stops[0] }}. Route: {{ bus.stops | join(' → ') }}.</p>
+  </div>
+  {% else %}
+  {% set live = bus.live %}
+  <header class="panel trk-head">
+    <div class="trk-title">
+      <span class="bus-badge">{{ icon('bus') }}</span>
+      <div class="trk-name">
+        <h2>{{ bus.number }}</h2>
+        <p>{{ live.origin }} → {{ live.destination }} · {{ live.status_text }}</p>
+      </div>
+      <span class="trk-seats">{{ icon('seat') }} {{ plural(bus.available, 'seat') }} free</span>
+      {% if bus.available > 0 %}
+      <a class="btn btn-primary btn-sm" href="{{ url_for('book', bus_id=bus.id) }}">{{ icon('ticket') }} Book a seat</a>
+      {% endif %}
+    </div>
+    <div class="trk-banner {{ 'is-late' if live.late > 0 else 'is-on-time' }}" role="status">
+      {{ icon('alert' if live.late > 0 else 'check') }}
+      <strong>{{ live.late_text }}</strong>
+      {% if live.late > 0 %}
+      <span>Due at {{ live.next_stop }} at {{ live.due_clock }}, now expected at {{ live.eta_clock }}</span>
+      {% else %}
+      <span>Due at {{ live.next_stop }} at {{ live.due_clock }}, as the timetable says</span>
+      {% endif %}
+    </div>
+    <div class="trk-facts">
+      <div><span class="label">Next stop</span><strong>{{ live.next_stop }}</strong></div>
+      <div><span class="label">Expected arrival</span><strong>{{ live.eta_clock }}</strong></div>
+      <div><span class="label">Arriving in</span><strong class="big-eta" data-eta="{{ live.eta_seconds }}">{{ live.eta_text }}</strong></div>
+      <div><span class="label">Reaches {{ live.destination }}</span><strong>{{ live.arrive_clock }}</strong></div>
+    </div>
+  </header>
+
+  <section class="panel trk-timeline-panel">
+    <div class="trk-cols" aria-hidden="true"><span>Due</span><span>Expected</span><span></span><span>Stop</span><span>Delay</span></div>
+    <div class="trk-box">
+      <ol class="trk-timeline" data-position="{{ live.position }}">
+        {% for row in live.rows %}
+        <li class="trk-row is-{{ row.state }}">
+          <span class="trk-time">{{ row.due }}</span>
+          <span class="trk-time trk-exp {{ 'is-late' if row.late > 0 else 'is-ok' }}">{{ row.expected }}</span>
+          <span class="trk-rail"><span class="trk-dot"></span></span>
+          <div class="trk-stop">
+            <p class="trk-stop-name"><strong>{{ row.name }}</strong>
+              {% if changes[row.name] %}<span class="tl-change">Change for {{ changes[row.name] | join(', ') }}</span>{% endif %}
+            </p>
+            <p class="trk-sub">
+              {%- if row.state == 'passed' -%}Left at {{ row.leaves }}
+              {%- elif row.state == 'here' and row.first -%}Bus waiting here · leaves at {{ row.leaves }}
+              {%- elif row.state == 'here' -%}Bus is here · leaves at {{ row.leaves }}
+              {%- elif row.state == 'next' -%}Next stop · arriving in <b data-eta="{{ row.seconds }}">{{ (row.seconds + 59) // 60 }} min</b>
+              {%- else -%}in {{ (row.seconds + 59) // 60 }} min
+              {%- endif %} · {{ row.km }} km</p>
+          </div>
+          <span class="trk-late">
+            {%- if row.late > 0 -%}<span class="late-badge is-late">+{{ row.late }} min</span>
+            {%- else -%}<span class="late-badge is-on-time">On time</span>{%- endif -%}
+          </span>
+        </li>
+        {% endfor %}
+      </ol>
+      <span class="trk-bus" id="trk-bus" aria-hidden="true">{{ icon('bus') }}</span>
+    </div>
+    <p class="trk-note">Timetable: {{ bus.km }} km at 30 km/h with 1 minute at every stop. Traffic can make a bus late.</p>
+  </section>
+  {% endif %}
+</section>
+{%- endmacro -%}
+
+{%- if page == "track_live" -%}
+{{ tracker_live(bus, buses, changes) }}
+{%- else -%}
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }} · Smart DTC</title>
+  <script>
+    /* Use the theme saved last time before the page appears (no flash). */
+    try {
+      var savedTheme = localStorage.getItem("smartdtc-theme");
+      if (savedTheme) { document.documentElement.setAttribute("data-theme", savedTheme); }
+    } catch (error) { /* storage blocked: keep the light theme */ }
+  </script>
+  <link rel="stylesheet" href="{{ url_for('stylesheet') }}">
+</head>
+<body data-page="{{ page }}">
+
+<div class="app">
+
+  {# ===================== VERTICAL SIDEBAR (every page) ===================== #}
+  <aside class="sidebar">
+    <a class="brand" href="{{ url_for('home') }}">
+      <span class="brand-mark">{{ icon('bus') }}</span>
+      <span class="brand-text"><strong>Smart DTC</strong><small>Delhi-NCR live transit</small></span>
+    </a>
+
+    {# (link target, label, icon, pages that light it up) #}
+    {% set NAV = [
+      ('home', 'Home', 'home', ['home', 'ticket']),
+      ('track', 'Live Tracking', 'map', ['track']),
+      ('buses', 'Buses & Booking', 'bus', ['buses', 'book']),
+      ('about', 'About', 'info', ['about']),
+      ('python_lab', 'Python Lab', 'code', ['lab'])
+    ] %}
+    {# Shown only after the admin has logged in #}
+    {% set ADMIN_NAV = [
+      ('admin_dashboard', 'Fleet Overview', 'grid', ['fleet']),
+      ('admin_routes', 'Manage Routes', 'route', ['routes']),
+      ('admin_demand', 'Demand & Surge', 'zap', ['demand'])
+    ] %}
+    <nav class="side-nav" aria-label="Main">
+      {% for target, label, icon_name, lights in NAV %}
+      <a href="{{ url_for(target) }}" class="nav-link {{ 'is-active' if page in lights else '' }}" title="{{ label }}">
+        {{ icon(icon_name) }}<span>{{ label }}</span>
+      </a>
+      {% endfor %}
+      {% if is_admin %}
+      <p class="nav-heading"><span>Depot admin</span></p>
+      {% for target, label, icon_name, lights in ADMIN_NAV %}
+      <a href="{{ url_for(target) }}" class="nav-link {{ 'is-active' if page in lights else '' }}" title="{{ label }}">
+        {{ icon(icon_name) }}<span>{{ label }}</span>
+      </a>
+      {% endfor %}
+      {% endif %}
+    </nav>
+
+    <div class="side-foot">
+      <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch between light and dark navy">
+        <span class="theme-icon theme-icon-moon">{{ icon('moon') }}</span>
+        <span class="theme-icon theme-icon-sun">{{ icon('sun') }}</span>
+        <span class="theme-label">Dark navy</span>
+      </button>
+    </div>
+  </aside>
+
+  <div class="main">
+    {# ======================= TOP BAR (every page) ======================= #}
+    <header class="topbar">
+      <div class="page-titles">
+        <h1>{{ heading }}</h1>
+        {% if subheading %}<p>{{ subheading }}</p>{% endif %}
+      </div>
+      <div class="topbar-right">
+        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+        <div class="clock" aria-label="Current time">
+          <strong id="clock-time">--:--</strong>
+          <span id="clock-date"></span>
+        </div>
+        {% if is_admin %}
+        <a class="btn btn-ghost btn-sm topbar-btn" href="{{ url_for('admin_logout') }}">{{ icon('logout') }} Log out</a>
+        {% else %}
+        <button class="btn btn-primary btn-sm topbar-btn" type="button" id="login-open">{{ icon('login') }} Login</button>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="content content-{{ page }}">
+
+{# ============================================================ HOME #}
+{% if page == "home" %}
+<div class="home">
+  <section class="hero">
+    <div class="hero-main">
+      <span class="eyebrow">{{ icon('zap') }} Smarter · Safer · Sustainable</span>
+      <h2><span data-greeting>Hello</span>! Your bus journey, made predictable.</h2>
+      <p>Live seats, live bus status stop by stop, digital tickets and automatic priority access, all in one place.</p>
+      <div class="hero-actions">
+        <a class="btn btn-light" href="{{ url_for('track') }}">{{ icon('map') }} Track a bus live</a>
+        <a class="btn btn-outline-light" href="{{ url_for('buses') }}">{{ icon('ticket') }} Book a seat</a>
+        <a class="hero-link" href="{{ url_for('about') }}">Why we built Smart DTC {{ icon('arrow') }}</a>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat"><span class="hero-stat-icon">{{ icon('bus') }}</span><strong>{{ running }}</strong><span>buses running</span></div>
+      <div class="hero-stat"><span class="hero-stat-icon">{{ icon('seat') }}</span><strong id="stat-free">{{ free_seats }}</strong><span>free seats now</span></div>
+      <div class="hero-stat"><span class="hero-stat-icon">{{ icon('clock') }}</span><strong id="stat-ontime">{{ on_time }}</strong><span>on time right now</span></div>
+      <div class="hero-stat"><span class="hero-stat-icon">{{ icon('heart') }}</span><strong>{{ priority_served }}</strong><span>priority riders served</span></div>
+    </div>
+  </section>
+
+  <div class="home-grid">
+    <section class="panel live-window">
+      <div class="panel-head">
+        <h3>{{ icon('bus') }} Live buses</h3>
+        <a class="link" href="{{ url_for('buses') }}">All buses {{ icon('arrow') }}</a>
+      </div>
+      <ul class="bus-rows">
+        {% for bus in buses %}{{ bus_row(bus) }}{% else %}<li class="empty">No buses are running right now.</li>{% endfor %}
+      </ul>
+    </section>
+
+    <div class="home-side">
+      <section class="panel">
+        <div class="panel-head"><h3>{{ icon('ticket') }} Already booked?</h3></div>
+        <form class="inline-form" action="{{ url_for('find_ticket') }}" method="get">
+          <input type="text" name="code" placeholder="DTC-5B0FF42E" maxlength="20" aria-label="Ticket code" required>
+          <button class="btn btn-primary" type="submit">Show</button>
+        </form>
+        {% if my_tickets %}
+        <div class="chips">
+          <span class="small-title">Booked here:</span>
+          {% for code in my_tickets | reverse %}
+          <a class="chip" href="{{ url_for('ticket', code=code) }}">{{ code }}</a>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="muted small">Tickets you book in this browser appear here.</p>
+        {% endif %}
+      </section>
+      <section class="panel tip-card">
+        <span class="tip-icon">{{ icon('clock') }}</span>
+        <div>
+          <h3>Know before you go</h3>
+          <p class="muted">Live Tracking shows every stop with its time, like a train-status app, and tells you when a bus is running late.</p>
+          <a class="link" href="{{ url_for('track') }}">Open Live Tracking {{ icon('arrow') }}</a>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+{# ============================================================ LIVE TRACKING #}
+{% elif page == "track" %}
+<div class="track-page" id="trk-live">
+  {{ tracker_live(bus, buses, changes) }}
+</div>
+
+
+{# ============================================================ BUSES #}
+{% elif page == "buses" %}
+<div class="buses-page">
+  <form class="panel toolbar" method="get" action="{{ url_for('buses') }}">
+    <label class="field grow">
+      <span>{{ icon('search') }} Search a stop or bus</span>
+      <input type="search" name="q" value="{{ search }}" placeholder="e.g. Botanical Garden">
+    </label>
+    <label class="field">
+      <span>Sort by</span>
+      <select name="sort">
+        <option value="eta" {{ 'selected' if sort == 'eta' else '' }}>Arriving soonest</option>
+        <option value="seats" {{ 'selected' if sort == 'seats' else '' }}>Most free seats</option>
+        <option value="number" {{ 'selected' if sort == 'number' else '' }}>Bus number</option>
+      </select>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="free" value="1" {{ 'checked' if free_only else '' }}>
+      Only buses with free seats
+    </label>
+    <button class="btn btn-primary" type="submit">Apply</button>
+    <p class="toolbar-count">Showing {{ buses | length }} of {{ total }} buses</p>
+  </form>
+
+  {% if buses %}
+  <div class="bus-grid">
+    {% for bus in buses %}{{ bus_card(bus) }}{% endfor %}
+  </div>
+  {% else %}
+  <div class="panel empty">
+    No buses match your search. <a class="link" href="{{ url_for('buses') }}">Show all buses</a>
+  </div>
+  {% endif %}
+</div>
+
+
+{# ============================================================ BOOK #}
+{% elif page == "book" %}
+<div class="book-layout">
+  <section class="panel book-bus" data-bus-id="{{ bus.id }}">
+    <header class="bus-head">
+      <span class="bus-badge">{{ icon('bus') }}</span>
+      <div class="bus-title"><h4>{{ bus.number }}</h4><p>{{ bus.route_label }}</p></div>
+      <div class="ring ring-{{ bus.crowd_class }}" style="--p: {{ bus.percent }}"><span class="js-percent">{{ bus.percent }}%</span></div>
+    </header>
+    <div class="next-box">
+      <div class="next-text"><span class="label">Next stop</span><strong class="js-next">{{ bus.live.next_stop }}</strong></div>
+      {{ late_badge(bus) }}
+      <span class="eta-pill js-eta" data-eta="{{ bus.live.eta_seconds }}">{{ bus.live.eta_text }}</span>
+    </div>
+    {# Seat map. Seats are filled in order (save_ticket() in app.py), so the
+       first free seat will be yours. Each column is one row of the bus:
+       window, aisle | aisle, window. range(start, stop, step) makes the
+       first seat number of every row: 1, 5, 9, ... #}
+    <div class="seat-map js-seat-map" role="img" aria-label="Seat map: {{ bus.occupied }} of {{ bus.total }} seats taken">
+      <span class="bus-front" aria-hidden="true">Front</span>
+      <div class="seat-cols">
+        {% for first in range(1, bus.total + 1, SEATS_PER_ROW) %}
+        <div class="seat-col">
+          {% for seat in range(first, [first + SEATS_PER_ROW, bus.total + 1] | min) %}
+          <span class="seat {{ 'taken' if seat <= bus.occupied else ('yours' if seat == bus.occupied + 1 else 'free') }}" title="Seat {{ seat }}"></span>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    <p class="seat-legend">
+      <span><i class="key taken"></i>Taken</span>
+      <span><i class="key yours"></i>Your seat: <strong class="js-your-seat">{{ bus.occupied + 1 }} ({{ seat_position(bus.occupied + 1) }})</strong></span>
+      <span><i class="key free"></i><span class="js-seats">{{ plural(bus.available, 'seat') }} free</span></span>
+    </p>
+    <div>
+      <span class="label">Route</span>
+      <ol class="mini-route">
+        {% for stop in bus.stops %}<li>{{ stop }}</li>{% endfor %}
+      </ol>
+    </div>
+  </section>
+
+  <section class="panel book-form">
+    <h3>Passenger details</h3>
+    <form class="form" method="post">
+      <label for="name">Name</label>
+      <input id="name" name="name" type="text" maxlength="60" value="{{ form.get('name', '') }}" required autofocus>
+
+      <div class="two-fields">
+        <div>
+          <label for="age">Age</label>
+          <input id="age" name="age" type="number" min="1" max="120" value="{{ form.get('age', '') }}" required>
+        </div>
+        <div>
+          <label for="category">Category</label>
+          <select id="category" name="category">
+            {% for category in categories %}
+            <option {{ 'selected' if form.get('category') == category else '' }}>{{ category }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-wide" type="submit">{{ icon('ticket') }} Generate Ticket</button>
+    </form>
+    <div class="note-box">{{ icon('heart') }}<span>Priority access is given automatically to passengers aged 70 or above, women and differently-abled passengers.</span></div>
+  </section>
+</div>
+
+
+{# ============================================================ TICKET #}
+{% elif page == "ticket" %}
+<div class="ticket-wrap">
+  <article class="ticket {{ 'ticket-priority' if ticket.priority else '' }}">
+    <div class="ticket-left">
+      <span class="badge {{ 'badge-gold' if ticket.priority else 'badge-blue' }}">{{ ticket.label }}</span>
+      <h2>{{ icon('check') }} Booking Confirmed</h2>
+      {# 8 x 8 squares made from the ticket code by ticket_pattern() in app.py #}
+      <div class="pattern" role="img" aria-label="Square pattern made from ticket code {{ ticket.code }}">
+        {%- for row in ticket.pattern %}{% for bit in row %}<span class="{{ 'on' if bit == '1' else 'off' }}"></span>{% endfor %}{% endfor -%}
+      </div>
+      <p class="ticket-code">{{ ticket.code }}</p>
+    </div>
+    <div class="ticket-right">
+      <dl class="ticket-details">
+        <div><dt>Passenger</dt><dd><strong>{{ ticket.name }}</strong> · {{ ticket.category }} · Age {{ ticket.age }}</dd></div>
+        <div><dt>Bus</dt><dd>{{ ticket.bus_number }} · {{ ticket.route_label }}</dd></div>
+        <div><dt>Seat allocation</dt><dd><strong>{{ ticket.seat }}</strong> ({{ ticket.seat_position }})</dd></div>
+        <div><dt>Status</dt><dd>{{ ticket.status }}</dd></div>
+        <div><dt>Booked on</dt><dd>{{ ticket.booked_at }}</dd></div>
+      </dl>
+      <div class="card-actions no-print">
+        <a class="btn btn-primary btn-sm" href="{{ url_for('track', bus_id=ticket.bus_id) }}">{{ icon('map') }} Track my bus</a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick="window.print()">Print ticket</button>
+      </div>
+    </div>
+  </article>
+</div>
+
+
+{# ============================================================ ABOUT #}
+{% elif page == "about" %}
+<div class="about-page">
+  <nav class="tabs" aria-label="About Smart DTC">
+    <a class="tab {{ 'is-active' if tab == 'why' else '' }}" href="?tab=why" data-tab="why">{{ icon('bulb') }} Why Smart DTC</a>
+    <a class="tab {{ 'is-active' if tab == 'impact' else '' }}" href="?tab=impact" data-tab="impact">{{ icon('chart') }} Impact</a>
+  </nav>
+
+  {# ---------- Why Smart DTC ---------- #}
+  <div class="tab-panel about" data-panel="why" {{ 'hidden' if tab != 'why' else '' }}>
+    <section class="about-hero">
+      <div>
+        <span class="eyebrow">{{ icon('bulb') }} Our mission</span>
+        <h2>Make every bus journey in Delhi-NCR predictable, fair and less crowded.</h2>
+      </div>
+      <p>Buses in Delhi-NCR run on fixed timetables. A commuter at a stop cannot see how full the next bus is or when it will arrive, and the depot cannot see how many people are waiting. Smart DTC connects both sides with live data.</p>
+    </section>
+
+    <div class="about-grid">
+      <section class="panel about-col">
+        <h3 class="about-h about-problem">{{ icon('alert') }} The problem</h3>
+        <ul class="about-list">
+          <li><strong>No live information.</strong> Commuters cannot see how full a bus is, where it is or whether it is late, so everyone crowds the door of every bus.</li>
+          <li><strong>Priority seats are missed.</strong> Seats for senior citizens, women and differently-abled passengers are often not available to them at peak hours.</li>
+          <li><strong>Depots react late.</strong> Managers have no live picture of waiting crowds, so relief buses come late or not at all.</li>
+        </ul>
+      </section>
+
+      <section class="panel about-col">
+        <h3 class="about-h about-solution">{{ icon('bulb') }} Our solution</h3>
+        <ul class="about-list ticks">
+          <li>{{ icon('check') }}<span>Live seats and arrival countdowns for every bus</span></li>
+          <li>{{ icon('check') }}<span>Live tracking stop by stop, with "running late" alerts</span></li>
+          <li>{{ icon('check') }}<span>Digital tickets with automatic <strong>PRIORITY ACCESS</strong></span></li>
+          <li>{{ icon('check') }}<span>Surge alert at 35 waiting, and one click sends a relief bus</span></li>
+        </ul>
+      </section>
+
+      <section class="panel about-col">
+        <h3 class="about-h about-how">{{ icon('route') }} How it works</h3>
+        <ol class="steps">
+          <li><span class="step-num">1</span><span>A commuter checks live seats and tracks the bus</span></li>
+          <li><span class="step-num">2</span><span>Books a seat; priority is detected automatically</span></li>
+          <li><span class="step-num">3</span><span>The depot sees demand: 35+ waiting means SURGE</span></li>
+          <li><span class="step-num">4</span><span>A relief bus is sent and the crowd drops by 35</span></li>
+        </ol>
+      </section>
+    </div>
+
+    <section class="panel about-foot">
+      <div class="sdg-row">
+        <div class="sdg-chip sdg-10">{{ icon('scale') }}<div><strong>SDG 10</strong><span>Reduced inequalities</span></div></div>
+        <div class="sdg-chip sdg-11">{{ icon('city') }}<div><strong>SDG 11</strong><span>Safe, accessible transport (11.2)</span></div></div>
+        <div class="sdg-chip sdg-13">{{ icon('leaf') }}<div><strong>SDG 13</strong><span>Fewer private vehicles</span></div></div>
+      </div>
+      <p class="team"><span class="label">Built by</span> Ankit Verma (team leader) · Anibirnna Satpathy · Jaahnavi Shrivastava · Sakshi Ojha · Muskaan Singh <span class="muted">· 2026CSAE100, Bennett University</span></p>
+    </section>
+  </div>
+
+  {# ---------- Impact ---------- #}
+  <div class="tab-panel impact" data-panel="impact" {{ 'hidden' if tab != 'impact' else '' }}>
+    <div class="stat-row">
+      <div class="stat-tile"><span class="stat-icon">{{ icon('users') }}</span><strong class="count-up" data-value="{{ served }}">{{ served }}</strong><span>Passengers served</span></div>
+      <div class="stat-tile"><span class="stat-icon">{{ icon('heart') }}</span><strong class="count-up" data-value="{{ priority }}">{{ priority }}</strong><span>Priority passengers</span></div>
+      <div class="stat-tile"><span class="stat-icon">{{ icon('bus') }}</span><strong class="count-up" data-value="{{ relief }}">{{ relief }}</strong><span>Relief buses dispatched</span></div>
+      <div class="stat-tile"><span class="stat-icon">{{ icon('zap') }}</span><strong class="count-up" data-value="{{ moved }}">{{ moved }}</strong><span>Commuters moved by relief buses</span></div>
+    </div>
+
+    <div class="impact-grid">
+      <section class="panel">
+        <h3>{{ icon('users') }} Riders by category</h3>
+        {{ bar_chart(by_category) }}
+      </section>
+      <section class="panel">
+        <h3>{{ icon('bus') }} Tickets per bus</h3>
+        {{ bar_chart(by_bus) }}
+      </section>
+      <section class="panel">
+        <h3>{{ icon('leaf') }} UN goals we support</h3>
+        <ul class="goal-list">
+          <li class="sdg-10">{{ icon('scale') }}<div><strong>SDG 10 · Reduced inequalities</strong><span>Priority access for senior citizens (70+), women and differently-abled passengers.</span></div></li>
+          <li class="sdg-11">{{ icon('city') }}<div><strong>SDG 11 · Sustainable cities</strong><span>Target 11.2: safe, accessible and sustainable transport for all.</span></div></li>
+          <li class="sdg-13">{{ icon('leaf') }}<div><strong>SDG 13 · Climate action</strong><span>Reliable buses help people leave private vehicles at home.</span></div></li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</div>
+
+
+{# ============================================================ PYTHON LAB #}
+{% elif page == "lab" %}
+<div class="lab">
+  <nav class="lab-tabs" aria-label="Experiential labs">
+    {% for topic in topics %}
+    <a href="?topic={{ topic.tag }}" class="lab-tab {{ 'is-active' if topic.tag == active_topic else '' }}" data-tab="{{ topic.tag }}" title="{{ topic.title }}">{{ topic.tag }}</a>
+    {% endfor %}
+  </nav>
+
+  {% for topic in topics %}
+  <section class="panel lab-topic" data-panel="{{ topic.tag }}" {{ 'hidden' if topic.tag != active_topic else '' }}>
+    <div class="lab-head">
+      <span class="tag">{{ topic.tag }}</span>
+      <div>
+        <h3>{{ topic.title }}</h3>
+        <p>{{ topic.summary }}</p>
+      </div>
+    </div>
+    <p class="where">In app.py: <code>{{ topic.where }}</code> · search for <code>[{{ topic.tag }}]</code></p>
+    <div class="table-wrap">
+      <table class="lab-table">
+        <thead><tr><th>Python that ran</th><th>Result</th><th>What it shows</th></tr></thead>
+        <tbody>
+          {% for example in topic.examples %}
+          <tr>
+            <td><code>{{ example.code }}</code></td>
+            <td><code class="result">{{ example.result }}</code></td>
+            <td>{{ example.note }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+
+  <p class="lab-foot">Every result was just worked out by app.py with the live data in smartdtc.db. In the examples <code>bus</code> is {{ first_bus }}; <code>buses</code>, <code>stops</code> and <code>tickets</code> hold every row; <code>stop_index</code> is <code>build_stop_index(buses)</code>; <code>network</code> is <code>build_stop_network(buses)</code>; <code>route_a</code> and <code>route_c</code> are the stops of {{ first_bus }} and {{ last_bus }} as sets.</p>
+</div>
+
+
+{# ============================================================ ADMIN: FLEET OVERVIEW #}
+{% elif page == "fleet" %}
+<div class="fleet">
+  <div class="stat-row">
+    {% for label, value in stats.items() %}
+    <div class="stat-tile {{ 'stat-alert' if label == 'Running late' and value > 0 else '' }}">
+      <strong>{{ value }}{% if loop.first %}<small> of {{ buses | length }}</small>{% endif %}</strong><span>{{ label }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <section class="panel fleet-panel">
+    <div class="panel-head"><h3>{{ icon('bus') }} Every bus right now</h3><span class="mini-live">live</span></div>
+    <div class="table-wrap">
+      <table class="fleet-table">
+        <thead><tr><th>Bus</th><th>Passengers on board</th><th>Current location</th><th>Destination</th><th>Expected arrival</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for bus in buses %}
+          <tr data-bus-id="{{ bus.id }}">
+            <td><strong>{{ bus.number }}</strong><span class="cell-note">{{ bus.route_label }}</span></td>
+            <td>
+              {# No min/max on this box on purpose: app.py keeps the number between
+                 0 and the bus's seats with min() and max() (report test 7). #}
+              <form class="inline-edit" method="post" action="{{ url_for('admin_bus', bus_id=bus.id) }}">
+                <input id="occupied-{{ bus.id }}" name="occupied" type="number" value="{{ bus.occupied }}" aria-label="Passengers on board {{ bus.number }}" required>
+                <span>/ {{ bus.total }}</span>
+                <button class="btn btn-ghost btn-xs" type="submit">Save</button>
+              </form>
+            </td>
+            <td class="js-location">{{ bus.live.location_text }}</td>
+            <td class="js-destination">{{ bus.live.destination if bus.in_service else '—' }}</td>
+            <td>
+              {% if bus.in_service %}
+              <strong class="js-arrive">{{ bus.live.arrive_clock }}</strong>
+              <span class="cell-note">in <span class="js-arrive-eta" data-eta="{{ bus.live.arrive_seconds }}">{{ (bus.live.arrive_seconds + 59) // 60 }} min</span></span>
+              {% else %}—{% endif %}
+            </td>
+            <td>{{ late_badge(bus) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel recent-panel">
+    <div class="panel-head"><h3>{{ icon('ticket') }} Latest bookings</h3></div>
+    <div class="recent-row">
+      {% for number, t in recent %}
+      <a class="recent-card" href="{{ url_for('ticket', code=t.code) }}">
+        <strong>{{ t.name }}</strong>
+        <span>{{ t.bus_number }} · seat {{ t.seat }}</span>
+        <span class="badge {{ 'badge-gold' if t.priority else 'badge-blue' }}">{{ 'Priority' if t.priority else 'Smart' }}</span>
+      </a>
+      {% else %}
+      <p class="muted">No bookings yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+
+{# ============================================================ ADMIN: MANAGE ROUTES #}
+{% elif page == "routes" %}
+<div class="routes">
+  <section class="panel route-form-panel">
+    <div class="panel-head"><h3>{{ icon('plus') }} Add a bus to a route</h3></div>
+    <form class="form route-form" method="post" action="{{ url_for('admin_routes') }}">
+      <div class="two-fields">
+        <div>
+          <label for="pickup">Pickup location</label>
+          <select id="pickup" name="pickup" required>
+            <option value="">Choose a stop</option>
+            {% for name in stop_names %}<option {{ 'selected' if form.get('pickup') == name else '' }}>{{ name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label for="dropoff">Drop-off location</label>
+          <select id="dropoff" name="dropoff" required>
+            <option value="">Choose a stop</option>
+            {% for name in stop_names %}<option {{ 'selected' if form.get('dropoff') == name else '' }}>{{ name }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="two-fields">
+        <div>
+          <label for="seats">Number of seats</label>
+          <input id="seats" name="seats" type="number" min="{{ min_seats }}" max="{{ max_seats }}" value="{{ form.get('seats', '') }}" required>
+        </div>
+        <div>
+          <label for="number">Bus number</label>
+          <input id="number" name="number" type="text" maxlength="7" value="{{ form.get('number', '') }}" required>
+        </div>
+      </div>
+      <div class="schedule-box">
+        <label class="switch">
+          <input type="checkbox" id="scheduled" name="scheduled" value="on" {{ 'checked' if form.get('scheduled') == 'on' else '' }}>
+          <span class="switch-track" aria-hidden="true"></span>
+          <span>Enable scheduling</span>
+        </label>
+        <div class="schedule-time">
+          <label for="first_departure">First departure</label>
+          <input id="first_departure" name="first_departure" type="time" value="{{ form.get('first_departure', '') }}">
+        </div>
+      </div>
+      <p class="muted small">The bus drives pickup → drop-off and back all day, at 30 km/h with 1 minute at every stop. The stops in between are found for you.</p>
+      <button class="btn btn-primary btn-wide" type="submit">{{ icon('plus') }} Add bus to route</button>
+    </form>
+  </section>
+
+  <section class="panel route-list-panel">
+    <div class="panel-head"><h3>{{ icon('route') }} Buses and their routes</h3><span class="muted small">{{ buses | length }} bus{{ '' if buses | length == 1 else 'es' }}</span></div>
+    <ul class="route-list">
+      {% for bus in buses %}
+      <li class="route-item">
+        <div class="route-item-main">
+          <p class="route-item-top"><strong>{{ bus.number }}</strong>
+            {% if bus.in_service %}<span class="badge badge-normal">Scheduled</span>{% else %}<span class="badge badge-off">Not scheduled</span>{% endif %}
+          </p>
+          <p class="route-line" title="{{ bus.stops | join(' → ') }}">{{ bus.route_label }}</p>
+          <p class="cell-note">{{ bus.stops | length }} stops · {{ bus.km }} km · {{ bus.total }} seats{% if bus.in_service %} · first departure {{ bus.first_departure }}{% endif %}</p>
+        </div>
+        <form method="post" action="{{ url_for('admin_schedule', bus_id=bus.id) }}">
+          <input type="hidden" name="turn" value="{{ 'off' if bus.in_service else 'on' }}">
+          <button class="btn btn-sm {{ 'btn-ghost' if bus.in_service else 'btn-primary' }}" type="submit">{{ 'Turn off' if bus.in_service else 'Turn on' }}</button>
+        </form>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+</div>
+
+
+{# ============================================================ ADMIN: DEMAND & SURGE #}
+{% elif page == "demand" %}
+<div class="demand-page">
+  <div class="admin-grid">
+    {% for stop in stops %}
+    <article class="panel admin-card {{ 'card-surge' if stop.status == 'SURGE' else '' }}">
+      <div class="panel-head">
+        <h4>{{ stop.name }}</h4>
+        <span class="badge badge-{{ stop.status | lower }}">{{ stop.status }}</span>
+      </div>
+      <p class="big-number">{{ stop.waiting }}<span>commuters waiting</span></p>
+      {% if stop.status == 'SURGE' %}
+      <p class="maths">{{ stop.waiting }} // 35 = {{ stop.full_loads }} full busload{{ '' if stop.full_loads == 1 else 's' }}, {{ stop.waiting }} % 35 = {{ stop.left_over }} left over</p>
+      {% else %}
+      <p class="maths">{{ stop.to_surge }} more until SURGE (35)</p>
+      {% endif %}
+      {# No min on this box on purpose: app.py turns -5 into 0 (report test 10) #}
+      <form class="form" method="post" action="{{ url_for('admin_stop', stop_id=stop.id) }}">
+        <label for="waiting-{{ stop.id }}">Set waiting commuters</label>
+        <input id="waiting-{{ stop.id }}" name="waiting" type="number" value="{{ stop.waiting }}" required>
+        <button class="btn btn-primary btn-wide" type="submit">Update Demand</button>
+      </form>
+      {% if stop.status == 'SURGE' %}
+      <form method="post" action="{{ url_for('admin_dispatch', stop_id=stop.id) }}">
+        <button class="btn btn-danger btn-wide" type="submit">{{ icon('zap') }} Dispatch Relief Bus</button>
+      </form>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+
+  <section class="panel dispatch-panel">
+    <div class="panel-head"><h3>{{ icon('bus') }} Relief buses sent</h3>{% if surge_count %}<span class="badge badge-surge">{{ plural(surge_count, 'surge') }}</span>{% endif %}</div>
+    {% if dispatches %}
+    <div class="table-wrap">
+      <table class="compact">
+        <thead><tr><th>Relief bus</th><th>Stop</th><th>Waiting before → after</th><th>Sent</th></tr></thead>
+        <tbody>
+          {% for d in dispatches %}
+          <tr><td><strong>{{ d.label }}</strong></td><td>{{ d.stop_name }}</td><td>{{ d.waiting_before }} → {{ d.waiting_after }}</td><td>{{ d.created_at | nice_time }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="muted">No relief buses sent yet. When a stop reaches 35 waiting commuters, a Dispatch button appears on its card.</p>
+    {% endif %}
+  </section>
+</div>
+
+
+{# ============================================================ NOT FOUND #}
+{% elif page == "error" %}
+<div class="center-stage">
+  <section class="panel login-card">
+    <span class="login-icon">{{ icon('alert') }}</span>
+    <h2>{{ message }}</h2>
+    <p class="muted">Error 404: what you asked for does not exist.</p>
+    <a class="btn btn-primary" href="{{ url_for('home') }}">{{ icon('home') }} Back to Home</a>
+  </section>
+</div>
+{% endif %}
+
+    </main>
+  </div>
+</div>
+
+{# Messages from flash() in app.py, e.g. "This bus is full.", shown as toasts.
+   Messages about logging in are shown inside the login form instead. #}
+<div class="toasts" aria-live="polite">
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+  {% if category != 'login' %}
+  <div class="toast toast-{{ category }}" role="status">
+    <span class="toast-text">{{ message }}</span>
+    <button class="toast-close" type="button" aria-label="Close">&times;</button>
+  </div>
+  {% endif %}
+  {% endfor %}
+</div>
+
+{# ======================= LOGIN FORM (opens from the Login button) ======================= #}
+{% if not is_admin %}
+<dialog class="modal" id="login-dialog" aria-labelledby="login-title">
+  <div class="modal-card">
+    <form method="dialog"><button class="modal-close" aria-label="Close the login form">&times;</button></form>
+    <span class="login-icon">{{ icon('shield') }}</span>
+    <h2 id="login-title">Depot admin login</h2>
+    <p class="muted">Log in to see the whole fleet, manage routes and send relief buses.</p>
+    {% for message in get_flashed_messages(category_filter=['login']) %}
+    <p class="form-error" role="alert">{{ icon('alert') }} {{ message }}</p>
+    {% endfor %}
+    <form class="form" method="post" action="{{ url_for('admin_login') }}">
+      <input type="hidden" name="next" value="{{ request.path }}">
+      <label for="password">Admin password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button class="btn btn-primary btn-wide" type="submit">{{ icon('login') }} Log in</button>
+    </form>
+  </div>
+</dialog>
+{% endif %}
+
+{# Data from app.py for the JavaScript below (tojson makes it safe JSON) #}
+<script id="page-data" type="application/json">{{ page_data | tojson }}</script>
+
+<script>
+/* =========================================================================
+   Smart DTC JavaScript: makes the pages live without reloading them.
+   - clock, greeting, light / dark navy theme, toasts, login form
+   - countdowns that tick every second
+   - asks app.py for /api/live every few seconds and updates the buses
+   - Live Tracking: asks app.py for the new stop list every 5 seconds
+   - tabs on the About, Python Lab and admin pages
+   ========================================================================= */
+(function () {
+  "use strict";
+
+  const API_URL = "{{ url_for('api_live') }}";
+  const page = document.body.getAttribute("data-page");
+
+  /* ---------- small helpers ---------- */
+  const $ = (selector, root) => (root || document).querySelector(selector);
+  const $all = (selector, root) => Array.from((root || document).querySelectorAll(selector));
+  const plural = (count, word) => count + " " + word + (count === 1 ? "" : "s");
+
+  function countdown(seconds) {          // 312 -> "5:12" (same as countdown_text in app.py)
+    seconds = Math.max(0, Math.round(seconds));
+    if (seconds <= 0) { return "Now"; }
+    if (seconds >= 3600) {
+      const minutes = Math.floor(seconds % 3600 / 60);
+      return Math.floor(seconds / 3600) + "h " + (minutes < 10 ? "0" : "") + minutes + "m";
+    }
+    const rest = seconds % 60;
+    return Math.floor(seconds / 60) + ":" + (rest < 10 ? "0" : "") + rest;
+  }
+
+  function seatText(seat) {              // same rule as seat_position() in app.py
+    const row = Math.floor((seat - 1) / 4) + 1;
+    const place = (seat % 4 === 0 || seat % 4 === 1) ? "window" : "aisle";
+    return seat + " (Row " + row + ", " + place + ")";
+  }
+
+  /* ---------- theme: light (navy + light) or dark navy ---------- */
+  const html = document.documentElement;
+  const themeButton = $("#theme-toggle");
+  function showTheme() {
+    const dark = html.getAttribute("data-theme") === "dark";
+    themeButton.querySelector(".theme-label").textContent = dark ? "Light mode" : "Dark navy";
+    themeButton.setAttribute("aria-pressed", dark ? "true" : "false");
+  }
+  themeButton.addEventListener("click", () => {
+    const next = html.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    html.setAttribute("data-theme", next);
+    try { localStorage.setItem("smartdtc-theme", next); } catch (error) { /* ignore */ }
+    showTheme();
+  });
+  showTheme();
+
+  /* ---------- clock and greeting ---------- */
+  function tickClock() {
+    const now = new Date();
+    $("#clock-time").textContent = now.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+    $("#clock-date").textContent = now.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+  }
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Good morning" : (hour < 17 ? "Good afternoon" : "Good evening");
+  $all("[data-greeting]").forEach((element) => { element.textContent = greeting; });
+
+  /* ---------- toasts (flash messages) ---------- */
+  $all(".toast").forEach((toast, number) => {
+    const close = () => { toast.classList.add("is-leaving"); setTimeout(() => toast.remove(), 350); };
+    toast.querySelector(".toast-close").addEventListener("click", close);
+    setTimeout(close, 6500 + number * 900);
+  });
+
+  /* ---------- the login form: a <dialog> that opens from the Login button ---------- */
+  const dialog = $("#login-dialog");
+  if (dialog) {
+    const openLogin = () => {
+      if (typeof dialog.showModal === "function") {
+        if (!dialog.open) { dialog.showModal(); }
+      } else {
+        dialog.setAttribute("open", "");       // very old browsers
+      }
+      setTimeout(() => $("#password").focus(), 30);
+    };
+    $("#login-open").addEventListener("click", openLogin);
+    // a click on the dark area around the form closes it
+    dialog.addEventListener("click", (event) => { if (event.target === dialog) { dialog.close(); } });
+    // ?login=1 in the address (after a wrong password) opens the form by itself
+    const address = new URL(window.location.href);
+    if (address.searchParams.has("login")) {
+      openLogin();
+      address.searchParams.delete("login");
+      history.replaceState(null, "", address);
+    }
+  }
+
+  /* ---------- countdowns: each one remembers its arrival moment ---------- */
+  function setDeadline(element, seconds) {
+    element.setAttribute("data-deadline", String(Date.now() + seconds * 1000));
+  }
+  function tickCountdowns() {
+    const now = Date.now();
+    $all("[data-deadline]").forEach((element) => {
+      const left = (Number(element.getAttribute("data-deadline")) - now) / 1000;
+      element.textContent = countdown(left);
+      element.classList.toggle("is-soon", left < 60);
+    });
+  }
+  function startCountdowns(root) {
+    $all("[data-eta]", root).forEach((element) => setDeadline(element, Number(element.getAttribute("data-eta"))));
+  }
+  startCountdowns(document);
+  tickClock();
+  tickCountdowns();
+  setInterval(() => { tickClock(); tickCountdowns(); }, 1000);
+
+  /* ---------- ask app.py for live data every few seconds ---------- */
+  function startPolling(seconds, handler) {
+    let busy = false;
+    const ask = () => {
+      if (busy || document.hidden) { return; }
+      busy = true;
+      fetch(API_URL, { cache: "no-store" })
+        .then((response) => response.json())
+        .then(handler)
+        .catch(() => { /* server stopped: try again next time */ })
+        .finally(() => { busy = false; });
+    };
+    setInterval(ask, seconds * 1000);
+    return ask;
+  }
+
+  /* The "After that" list on a bus card: the 3 stops after the next one. */
+  function fillThen(list, upcoming) {
+    list.innerHTML = "";
+    const later = upcoming.slice(1, 4);
+    if (later.length === 0) {
+      const end = document.createElement("li");
+      end.className = "then-end";
+      end.textContent = "Last stop of this trip, then it turns back";
+      list.append(end);
+    }
+    later.forEach((stop) => {
+      const item = document.createElement("li");
+      const name = document.createElement("span");
+      name.textContent = stop.name;
+      const when = document.createElement("em");
+      when.textContent = "in " + Math.ceil(stop.seconds / 60) + " min";
+      item.append(name, when);
+      list.append(item);
+    });
+  }
+
+  /* The seat map on the Book page: taken seats, your seat, free seats. */
+  function fillSeatMap(map, bus) {
+    $all(".seat", map).forEach((seat, number) => {
+      const n = number + 1;
+      seat.className = "seat " + (n <= bus.occupied ? "taken" : (n === bus.occupied + 1 ? "yours" : "free"));
+    });
+    map.setAttribute("aria-label", "Seat map: " + bus.occupied + " of " + bus.total + " seats taken");
+  }
+
+  /* The coloured label: On time, Late 3 min, Not started or Not running. */
+  function fillLate(label, bus) {
+    let text = "On time";
+    let kind = "is-on-time";
+    if (!bus.in_service) { text = "Not running"; kind = "is-off"; }
+    else if (!bus.running) { text = "Not started"; kind = "is-off"; }
+    else if (bus.late > 0) { text = "Late " + bus.late + " min"; kind = "is-late"; }
+    label.textContent = text;
+    label.className = "late-badge js-late " + kind;
+  }
+
+  /* Update every element that shows a bus (cards, rows, tables). */
+  function updateLiveBits(live) {
+    live.buses.forEach((bus) => {
+      $all('[data-bus-id="' + bus.id + '"]').forEach((box) => {
+        const write = (selector, text) => { const el = box.querySelector(selector); if (el) { el.textContent = text; } };
+        write(".js-next", bus.next_stop);
+        write(".js-status", bus.status_text);
+        write(".js-crowd", bus.crowd);
+        write(".js-percent", bus.percent + "%");
+        write(".js-seats", plural(bus.available, "seat") + " free");
+        write(".js-your-seat", bus.available > 0 ? seatText(bus.occupied + 1) : "none, the bus is full");
+        write(".js-location", bus.location_text);
+        if (bus.in_service) {
+          write(".js-destination", bus.destination);
+          write(".js-arrive", bus.arrive_clock);
+        }
+        const eta = box.querySelector(".js-eta");
+        if (eta) { setDeadline(eta, bus.eta_seconds); }
+        const arrive = box.querySelector(".js-arrive-eta");
+        if (arrive) { setDeadline(arrive, bus.arrive_seconds); }
+        const late = box.querySelector(".js-late");
+        if (late) { fillLate(late, bus); }
+        const ring = box.querySelector(".ring");
+        if (ring) {
+          ring.style.setProperty("--p", bus.percent);
+          ring.className = "ring ring-" + bus.crowd_class;
+        }
+        const then = box.querySelector(".js-then");
+        if (then) { fillThen(then, bus.upcoming); }
+        const seatMap = box.querySelector(".js-seat-map");
+        if (seatMap) { fillSeatMap(seatMap, bus); }
+      });
+    });
+    const running = live.buses.filter((bus) => bus.running);
+    const free = $("#stat-free");
+    if (free) {
+      const shown = live.buses.filter((bus) => bus.in_service);
+      free.textContent = shown.reduce((sum, bus) => sum + bus.available, 0);
+    }
+    const onTime = $("#stat-ontime");
+    if (onTime) { onTime.textContent = running.filter((bus) => bus.late === 0).length; }
+    tickCountdowns();
+  }
+
+  if (["home", "buses", "book", "fleet"].includes(page)) {
+    startPolling(5, updateLiveBits);
+  }
+
+  /* ---------- tabs (About, Python Lab) ---------- */
+  function setupTabs(parameter) {
+    const tabs = $all("[data-tab]");
+    const panels = $all("[data-panel]");
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", (event) => {
+        event.preventDefault();
+        const name = tab.getAttribute("data-tab");
+        tabs.forEach((other) => other.classList.toggle("is-active", other === tab));
+        panels.forEach((panel) => { panel.hidden = panel.getAttribute("data-panel") !== name; });
+        const address = new URL(window.location.href);
+        address.searchParams.set(parameter, name);
+        history.replaceState(null, "", address);
+        if (name === "impact") { countUp(); }
+      });
+    });
+  }
+  if (page === "lab") { setupTabs("topic"); }
+  if (page === "about") { setupTabs("tab"); }
+
+  /* ---------- About > Impact: numbers count up ---------- */
+  function countUp() {
+    $all(".count-up").forEach((element) => {
+      const target = Number(element.getAttribute("data-value"));
+      const start = performance.now();
+      const step = (now) => {
+        const share = Math.min((now - start) / 900, 1);
+        element.textContent = Math.round(target * share * (2 - share));
+        if (share < 1) { requestAnimationFrame(step); }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  if (page === "about" && !$('[data-panel="impact"]').hidden) { countUp(); }
+
+  /* ---------- Manage routes: the time box only matters with scheduling on ---------- */
+  const scheduled = $("#scheduled");
+  if (scheduled) {
+    const showTime = () => { $("#first_departure").disabled = !scheduled.checked; };
+    scheduled.addEventListener("change", showTime);
+    showTime();
+  }
+
+  /* =======================================================================
+     LIVE TRACKING
+     The stop list comes from app.py as finished HTML (tracker_live macro).
+     Every 5 seconds we ask for it again and swap it in, then put the
+     little bus on the line between the stops.
+     ======================================================================= */
+  if (page !== "track") { return; }
+  const live = $("#trk-live");
+
+  function placeBus() {
+    const box = $(".trk-box", live);
+    const list = $(".trk-timeline", live);
+    const marker = $("#trk-bus", live);
+    if (!box || !list || !marker) { return; }
+    const dots = $all(".trk-dot", list);
+    if (dots.length === 0) { return; }
+    const boxRect = box.getBoundingClientRect();
+    const centre = (dot) => {
+      const rect = dot.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2 - boxRect.left + box.scrollLeft,
+               y: rect.top + rect.height / 2 - boxRect.top + box.scrollTop };
+    };
+    const position = Number(list.getAttribute("data-position")) || 0;
+    const first = Math.min(Math.floor(position), dots.length - 1);
+    const second = Math.min(first + 1, dots.length - 1);
+    const a = centre(dots[first]);
+    const b = centre(dots[second]);
+    const y = a.y + (b.y - a.y) * (position - first);
+    marker.style.left = (a.x - marker.offsetWidth / 2) + "px";
+    marker.style.top = (y - marker.offsetHeight / 2) + "px";
+  }
+
+  function showCurrentStop() {             // scroll a long stop list to the bus
+    const box = $(".trk-box", live);
+    const row = $(".trk-row.is-here, .trk-row.is-next", live);
+    if (box && row && box.scrollHeight > box.clientHeight) {
+      box.scrollTop = Math.max(0, row.offsetTop - box.clientHeight / 3);
+    }
+  }
+
+  let busy = false;
+  function refresh() {
+    if (busy || document.hidden) { return; }
+    busy = true;
+    fetch(window.location.pathname + "?part=live", { cache: "no-store" })
+      .then((response) => response.text())
+      .then((htmlText) => {
+        const oldBox = $(".trk-box", live);
+        const scrolled = oldBox ? oldBox.scrollTop : 0;
+        live.innerHTML = htmlText;
+        const newBox = $(".trk-box", live);
+        if (newBox) { newBox.scrollTop = scrolled; }
+        startCountdowns(live);
+        tickCountdowns();
+        placeBus();
+      })
+      .catch(() => { /* server stopped: try again next time */ })
+      .finally(() => { busy = false; });
+  }
+
+  showCurrentStop();
+  placeBus();
+  window.addEventListener("resize", placeBus);
+  setInterval(refresh, 5000);
+})();
+</script>
+</body>
+</html>
+{%- endif -%}
